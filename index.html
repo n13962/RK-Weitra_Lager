@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="de" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RK Lager Weitra - MediStock Cloud</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        window.firebaseAppInit = async function() {
+            try {
+                // Deine echte Firebase Konfiguration für RK Lager Weitra
+                const firebaseConfig = {
+                    apiKey: "AIzaSyCS7qc-U5VFfer1FiwydS06jhusZC3rq88",
+                    authDomain: "rk-lager-weitra.firebaseapp.com",
+                    projectId: "rk-lager-weitra",
+                    storageBucket: "rk-lager-weitra.firebasestorage.app",
+                    messagingSenderId: "717411437797",
+                    appId: "1:717411437797:web:d5e1938bc585e1b80d580c",
+                    measurementId: "G-82GCP125TJ"
+                };
+
+                const app = initializeApp(firebaseConfig);
+                const db = getFirestore(app);
+                const auth = getAuth(app);
+
+                window.db = db;
+                window.appId = 'rk-lager-weitra-v1';
+
+                await signInAnonymously(auth);
+                initCloudSync();
+            } catch(e) {
+                console.warn("Cloud fallback to local storage simulation:", e);
+                initLocalFallback();
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (window.firebaseAppInit) window.firebaseAppInit();
+        });
+    </script>
+
+    <style>
+        * { -webkit-tap-highlight-color: transparent; }
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; touch-action: manipulation; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        #interactive.viewport video { width: 100%; height: 100%; object-fit: cover; border-radius: 0.75rem; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-full flex flex-col overflow-hidden">
+
+    <header class="bg-indigo-900 text-white shadow-md z-20 flex-shrink-0">
+        <div class="px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2">
+            <div class="flex items-center space-x-2 sm:space-x-3 min-w-0">
+                <div class="bg-indigo-800 p-2 sm:p-2.5 rounded-xl border border-indigo-700 shadow-inner flex items-center justify-center flex-shrink-0">
+                    <i data-lucide="crosshair" class="w-5 h-5 sm:w-7 sm:h-7 text-emerald-400"></i>
+                </div>
+                <div class="min-w-0">
+                    <h1 class="text-base sm:text-xl font-bold tracking-tight flex items-center gap-1.5 sm:gap-2 truncate">
+                        RK Lager Weitra <span id="role-badge-header" class="text-[10px] sm:text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full font-medium truncate max-w-[120px] sm:max-w-none">Personal</span>
+                    </h1>
+                    <p class="text-[10px] sm:text-xs text-indigo-200 truncate hidden sm:block">Cloud-Live-Bestand & Ordner-Entnahme</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-1.5 sm:space-x-3 flex-shrink-0">
+                <button onclick="openScannerModal('all')" class="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold shadow-sm transition-all text-xs sm:text-sm min-h-[40px] sm:min-h-[44px]">
+                    <i data-lucide="scan" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+                    <span class="hidden sm:inline">Kamera Scan</span>
+                </button>
+                <button onclick="openLoginModal()" id="auth-action-btn" type="button" class="cursor-pointer z-30 flex items-center gap-1.5 bg-indigo-800 hover:bg-indigo-700 active:scale-95 text-indigo-100 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl font-bold border border-indigo-600 transition-all text-xs sm:text-sm min-h-[40px] sm:min-h-[44px]">
+                    <i data-lucide="shield" class="w-4 h-4 sm:w-5 sm:h-5 text-amber-400"></i>
+                    <span id="auth-btn-text">Admin Login</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+        
+        <nav class="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-row md:flex-col justify-between flex-shrink-0 select-none z-10 overflow-x-auto">
+            <div class="p-2 md:p-3 flex md:flex-col items-center md:items-stretch gap-1 sm:gap-2 w-full justify-around md:justify-start">
+                <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn flex-1 md:flex-none flex items-center justify-center md:justify-start gap-2 md:gap-3.5 px-2.5 md:px-3.5 py-2 md:py-3 rounded-xl font-medium text-indigo-900 bg-indigo-50 transition-all text-xs md:text-sm">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5 md:w-6 md:h-6 flex-shrink-0"></i>
+                    <span>Dashboard</span>
+                </button>
+                
+                <button onclick="switchTab('quickscan')" id="nav-quickscan" class="nav-btn flex-1 md:flex-none flex items-center justify-center md:justify-start gap-2 md:gap-3.5 px-2.5 md:px-3.5 py-2 md:py-3 rounded-xl font-medium text-slate-600 hover:bg-slate-100 transition-all text-xs md:text-sm">
+                    <i data-lucide="folder-open" class="w-5 h-5 md:w-6 md:h-6 flex-shrink-0 text-amber-600"></i>
+                    <span class="font-bold">Ordner & Entnahme</span>
+                </button>
+
+                <!-- ADMIN ONLY TABS -->
+                <div id="admin-nav-group" class="hidden flex md:flex-col gap-1 sm:gap-2 border-l md:border-l-0 md:border-t border-slate-200 md:border-slate-100 pl-1 md:pl-0 md:pt-2">
+                    <p class="hidden md:block px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Admin-Bereich</p>
+                    <button onclick="switchTab('inventory')" id="nav-inventory" class="nav-btn flex items-center justify-center md:justify-start gap-2 md:gap-3.5 px-2.5 md:px-3.5 py-2 md:py-3 rounded-xl font-medium text-slate-600 hover:bg-slate-100 transition-all text-xs md:text-sm">
+                        <i data-lucide="package" class="w-5 h-5 md:w-6 md:h-6 flex-shrink-0"></i>
+                        <span class="hidden md:inline">Artikelliste</span>
+                    </button>
+                    <button onclick="switchTab('admin')" id="nav-admin" class="nav-btn flex items-center justify-center md:justify-start gap-2 md:gap-3.5 px-2.5 md:px-3.5 py-2 md:py-3 rounded-xl font-medium text-slate-600 hover:bg-slate-100 transition-all text-xs md:text-sm">
+                        <i data-lucide="shield-check" class="w-5 h-5 md:w-6 md:h-6 flex-shrink-0 text-amber-600"></i>
+                        <span class="hidden md:inline font-bold">Admin, KFZ & Ordner</span>
+                    </button>
+                    <button onclick="switchTab('history')" id="nav-history" class="nav-btn flex items-center justify-center md:justify-start gap-2 md:gap-3.5 px-2.5 md:px-3.5 py-2 md:py-3 rounded-xl font-medium text-slate-600 hover:bg-slate-100 transition-all text-xs md:text-sm">
+                        <i data-lucide="history" class="w-5 h-5 md:w-6 md:h-6 flex-shrink-0 text-emerald-600"></i>
+                        <span class="hidden md:inline font-bold">Verlauf</span>
+                    </button>
+                    <button onclick="switchTab('users')" id="nav-users" class="nav-btn flex items-center justify-center md:justify-start gap-2 md:gap-3.5 px-2.5 md:px-3.5 py-2 md:py-3 rounded-xl font-medium text-slate-600 hover:bg-slate-100 transition-all text-xs md:text-sm">
+                        <i data-lucide="users" class="w-5 h-5 md:w-6 md:h-6 flex-shrink-0 text-indigo-600"></i>
+                        <span class="hidden md:inline font-bold">Benutzer</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="hidden md:block p-3 border-t border-slate-200 space-y-2">
+                <button onclick="loadDemoData()" class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all">
+                    <i data-lucide="database" class="w-4 h-4"></i>
+                    <span>Demo-Daten laden</span>
+                </button>
+            </div>
+        </nav>
+
+        <main class="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-slate-100 relative" id="main-content">
+            
+            <!-- DASHBOARD TAB -->
+            <div id="tab-dashboard" class="tab-pane space-y-6">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Gesamtartikel</p>
+                            <h3 id="stat-total-items" class="text-3xl font-extrabold text-slate-900 mt-1">0</h3>
+                        </div>
+                        <div class="p-4 bg-indigo-50 text-indigo-600 rounded-2xl"><i data-lucide="boxes" class="w-8 h-8"></i></div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wider text-amber-600">Anzahl Ordner</p>
+                            <h3 id="stat-folders-count" class="text-3xl font-extrabold text-amber-600 mt-1">0</h3>
+                        </div>
+                        <div class="p-4 bg-amber-50 text-amber-600 rounded-2xl"><i data-lucide="folder" class="w-8 h-8"></i></div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wider text-emerald-600">Entnahmen Heute</p>
+                            <h3 id="stat-withdrawals-today" class="text-3xl font-extrabold text-emerald-600 mt-1">0</h3>
+                        </div>
+                        <div class="p-4 bg-emerald-50 text-emerald-600 rounded-2xl"><i data-lucide="arrow-up-right" class="w-8 h-8"></i></div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 class="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
+                        <i data-lucide="zap" class="w-5 h-5 text-indigo-600"></i>
+                        Schnellzugriff & Ordner-Auswahl
+                    </h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button onclick="switchTab('quickscan')" class="p-4 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl flex items-center gap-3 transition-all w-full">
+                            <div class="p-3 bg-amber-600 text-white rounded-lg"><i data-lucide="folder-open" class="w-6 h-6"></i></div>
+                            <div class="text-left">
+                                <p class="font-bold text-amber-900 text-sm">Ordner-Auswahl & Barcode-Entnahme</p>
+                                <p class="text-xs text-amber-700">Produkte geordnet finden & schnell entnehmen</p>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QUICKSCAN & ENTNAHME TAB -->
+            <div id="tab-quickscan" class="tab-pane hidden space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 max-w-4xl mx-auto space-y-6">
+                    
+                    <div class="flex items-center justify-between pb-4 border-b border-slate-200">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                <i data-lucide="folder-open" class="w-6 h-6 text-amber-600"></i>
+                                Artikel per Ordner oder Scan auswählen
+                            </h2>
+                            <p class="text-xs text-slate-500 mt-0.5">Wählen Sie einen Ordner aus oder scannen Sie den Barcode, um Artikel zur Entnahmeliste hinzuzufügen.</p>
+                        </div>
+                        <span class="px-3 py-1 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl">Entnahme-Modus</span>
+                    </div>
+
+                    <!-- FOLDER SELECTION GRID -->
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                <i data-lucide="folder" class="w-4 h-4 text-amber-600"></i>
+                                Ordner-Kategorien
+                            </label>
+                            <span id="active-folder-label" class="text-xs font-bold text-indigo-600">Alle Produkte</span>
+                        </div>
+
+                        <div id="folder-buttons-grid" class="flex flex-wrap gap-2.5"></div>
+                    </div>
+
+                    <!-- PRODUCT SELECTION BUTTONS WITHIN SELECTED FOLDER WITH IMAGES -->
+                    <div class="space-y-2 pt-2">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Produkte im Ordner (Klick zum Hinzufügen):</label>
+                        <div id="folder-products-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-96 overflow-y-auto p-1"></div>
+                    </div>
+
+                    <!-- BARCODE SEARCH INPUT -->
+                    <div class="space-y-4 pt-4 border-t border-slate-100">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Oder Barcode direkt scannen / Name suchen:</label>
+                        <div class="flex gap-2">
+                            <div class="relative flex-1">
+                                <i data-lucide="scan" class="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <input type="text" id="quick-barcode-input" onkeydown="handleQuickBarcodeInput(event)" placeholder="Barcode scannen oder tippen..." class="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-base font-mono focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <button onclick="openScannerModal('quick')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 rounded-xl font-medium flex items-center gap-2">
+                                <i data-lucide="camera" class="w-5 h-5"></i>
+                                <span class="hidden sm:inline">Kamera</span>
+                            </button>
+                            <button onclick="processQuickScanInput()" class="bg-amber-600 hover:bg-amber-500 text-white px-5 rounded-xl font-bold">Hinzufügen</button>
+                        </div>
+                    </div>
+
+                    <!-- SUMMARY LIST / CART SECTION -->
+                    <div class="pt-6 border-t-2 border-slate-200 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                                <i data-lucide="shopping-bag" class="w-5 h-5 text-indigo-600"></i>
+                                Ausgewählte Artikel zur Entnahme (<span id="cart-item-count">0</span>)
+                            </h3>
+                            <button onclick="clearEntnahmeCart()" id="clear-cart-btn" class="text-xs text-rose-600 hover:text-rose-800 font-bold hidden flex items-center gap-1">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i> Liste leeren
+                            </button>
+                        </div>
+
+                        <!-- Empty state -->
+                        <div id="cart-empty-state" class="p-8 border-2 border-dashed border-slate-200 rounded-2xl text-center text-slate-400 space-y-2">
+                            <i data-lucide="package-open" class="w-10 h-10 mx-auto text-slate-300"></i>
+                            <p class="text-sm font-semibold">Noch keine Artikel ausgewählt.</p>
+                            <p class="text-xs text-slate-400">Klicken Sie oben auf ein Produkt aus einem Ordner oder scannen Sie einen Barcode.</p>
+                        </div>
+
+                        <!-- Cart items list -->
+                        <div id="cart-items-list" class="space-y-2.5 hidden"></div>
+
+                        <!-- Vehicle selection and submit block -->
+                        <div id="cart-action-block" class="hidden p-5 bg-indigo-50/70 border border-indigo-200 rounded-2xl space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Für welches Fahrzeug / KFZ? *</label>
+                                <select id="qs-vehicle" class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-base font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500"></select>
+                            </div>
+
+                            <button onclick="executeCartStockMovement()" class="w-full py-4 bg-rose-600 hover:bg-rose-500 active:scale-98 text-white rounded-xl font-bold text-lg shadow-sm flex items-center justify-center gap-2 transition-all">
+                                <i data-lucide="send" class="w-6 h-6"></i>
+                                <span>Entnahme jetzt verbuchen</span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- INVENTORY TAB -->
+            <div id="tab-inventory" class="tab-pane hidden space-y-4">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-3 items-center justify-between">
+                    <div class="relative flex-1 w-full md:w-80">
+                        <i data-lucide="search" class="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input type="text" id="inventory-search" oninput="renderInventory()" placeholder="Suche..." class="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm">
+                    </div>
+                    <div class="flex gap-2 w-full md:w-auto">
+                        <button onclick="openProductModal()" class="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 shadow-sm">
+                            <i data-lucide="plus" class="w-5 h-5"></i>
+                            <span>Neues Produkt</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase">
+                                <th class="py-3.5 px-4">Foto / Produkt</th>
+                                <th class="py-3.5 px-4">Ordner / Kategorie</th>
+                                <th class="py-3.5 px-4 text-center">Bestand</th>
+                                <th class="py-3.5 px-4 text-right">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventory-table-body" class="divide-y divide-slate-100 text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ADMIN TAB -->
+            <div id="tab-admin" class="tab-pane hidden space-y-6">
+                <div class="bg-gradient-to-r from-amber-600 to-indigo-900 text-white p-6 rounded-3xl shadow-md flex items-center justify-between">
+                    <div>
+                        <span class="px-2.5 py-0.5 bg-amber-400 text-slate-900 text-[10px] font-extrabold uppercase rounded-md">Admin-Konfiguration</span>
+                        <h2 class="text-xl font-black mt-1">Ordner & Fahrzeuge verwalten</h2>
+                    </div>
+                    <button onclick="openProductModal()" class="bg-white text-indigo-900 px-4 py-2.5 rounded-xl font-bold text-sm shadow-md">
+                        + Produkt anlegen
+                    </button>
+                </div>
+
+                <!-- FOLDER MANAGEMENT SECTION -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                            <i data-lucide="folder-plus" class="w-5 h-5 text-amber-600"></i>
+                            Ordner / Kategorien verwalten
+                        </h3>
+                        <span class="text-xs text-slate-500">Für die schnelle Produktauswahl am Tablet</span>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <input type="text" id="new-folder-input" placeholder="Neuen Ordnernamen eingeben..." class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+                        <button type="button" onclick="addFolder()" class="px-5 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-sm flex items-center gap-2">
+                            <i data-lucide="folder-plus" class="w-4 h-4"></i>
+                            <span>Ordner Anlegen</span>
+                        </button>
+                    </div>
+
+                    <div id="admin-folders-list" class="flex flex-wrap gap-2 pt-2"></div>
+                </div>
+
+                <!-- VEHICLE MANAGEMENT -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                    <h3 class="font-bold text-slate-900 text-base flex items-center gap-2 border-b border-slate-100 pb-3">
+                        <i data-lucide="truck" class="w-5 h-5 text-indigo-600"></i>
+                        Fahrzeuge (KFZ) verwalten
+                    </h3>
+                    <div class="flex gap-2">
+                        <input type="text" id="new-vehicle-input" placeholder="Neues Fahrzeug..." class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm">
+                        <button type="button" onclick="addVehicle()" class="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-sm">KFZ Hinzufügen</button>
+                    </div>
+                    <div id="vehicle-list-tags" class="flex flex-wrap gap-2 pt-2"></div>
+                </div>
+            </div>
+
+            <!-- HISTORY TAB -->
+            <div id="tab-history" class="tab-pane hidden space-y-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+                            <i data-lucide="history" class="w-5 h-5 text-emerald-600"></i>
+                            Entnahme-Verlauf & Protokoll
+                        </h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase">
+                                    <th class="py-3 px-4">Datum & Uhrzeit</th>
+                                    <th class="py-3 px-4">Art</th>
+                                    <th class="py-3 px-4">Produkt</th>
+                                    <th class="py-3 px-4">Menge</th>
+                                    <th class="py-3 px-4">Fahrzeug</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-table-body" class="divide-y divide-slate-100 text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- USERS TAB -->
+            <div id="tab-users" class="tab-pane hidden space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                    <h3 class="font-bold text-slate-900 text-base flex items-center gap-2 border-b border-slate-100 pb-3">
+                        <i data-lucide="users" class="w-5 h-5 text-indigo-600"></i>
+                        Admin-Benutzer verwalten
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input type="text" id="new-admin-user" placeholder="Benutzername..." class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm">
+                        <input type="password" id="new-admin-pass" placeholder="Passwort..." class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm">
+                    </div>
+                    <button onclick="createNewAdminUser()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-sm">Neuen Admin erstellen</button>
+                    
+                    <div class="overflow-x-auto pt-4">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase">
+                                    <th class="py-3 px-4">Benutzername</th>
+                                    <th class="py-3 px-4">Rolle</th>
+                                    <th class="py-3 px-4 text-right">Aktion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body" class="divide-y divide-slate-100 text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- LOGIN MODAL -->
+    <div id="login-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-sm p-5 sm:p-6 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="shield" class="w-5 h-5 text-indigo-600"></i>
+                    Admin Login
+                </h3>
+                <button onclick="closeLoginModal()" type="button" class="p-1 text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Benutzername</label>
+                    <input type="text" id="login-user" onkeydown="handleLoginKeydown(event)" placeholder="Benutzername..." class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Passwort</label>
+                    <input type="password" id="login-pass" onkeydown="handleLoginKeydown(event)" placeholder="Passwort..." class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <button onclick="submitAdminLogin()" type="button" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold rounded-xl text-sm shadow-md mt-2 transition-all">Anmelden</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PRODUCT MODAL -->
+    <div id="product-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="package-plus" class="w-5 h-5 text-indigo-600"></i>
+                    Produkt hinzufügen & Foto
+                </h3>
+                <button onclick="closeProductModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="space-y-3">
+                <input type="hidden" id="prod-id">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Produktbezeichnung *</label>
+                    <input type="text" id="prod-name" placeholder="z.B. Nierentasse oder Venflöne" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Ordner / Kategorie</label>
+                    <select id="prod-folder" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm"></select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Produktfoto (Upload oder URL)</label>
+                    <div class="flex gap-2 mb-2">
+                        <input type="text" id="prod-image" oninput="onImageInputChange()" placeholder="https://beispiel.de/bild.jpg" class="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                        <label class="px-3.5 py-2.5 bg-slate-200 hover:bg-slate-300 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1">
+                            <i data-lucide="upload" class="w-4 h-4"></i> Datei
+                            <input type="file" accept="image/*" onchange="handleImageUpload(event)" class="hidden">
+                        </label>
+                    </div>
+
+                    <!-- Image Preview Container -->
+                    <div id="prod-image-preview-wrap" class="w-full h-28 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center overflow-hidden relative">
+                        <img id="prod-image-preview" src="" alt="Vorschau" class="w-full h-full object-cover hidden">
+                        <span id="prod-image-placeholder" class="text-xs text-slate-400">Kein Foto ausgewählt</span>
+                    </div>
+
+                    <button type="button" id="crop-btn" onclick="openCropModal()" class="w-full mt-2 py-2 bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hidden">
+                        <i data-lucide="crop" class="w-4 h-4 text-amber-600"></i>
+                        <span>Bild zuschneiden & anpassen</span>
+                    </button>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Barcode (optional)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="prod-barcode" placeholder="Barcode scannen oder eingeben..." class="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono">
+                        <button onclick="openScannerModal('product_form')" type="button" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 rounded-xl flex items-center justify-center"><i data-lucide="camera" class="w-5 h-5"></i></button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Bestand (Stk.)</label>
+                        <input type="number" id="prod-stock" value="10" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Mindestbestand</label>
+                        <input type="number" id="prod-minstock" value="3" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm">
+                    </div>
+                </div>
+                <button onclick="saveProduct()" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-sm shadow-md mt-2">Produkt Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CROP MODAL -->
+    <div id="crop-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-md p-5 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="crop" class="w-5 h-5 text-amber-600"></i>
+                    Foto zuschneiden & positionieren
+                </h3>
+                <button onclick="closeCropModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <p class="text-xs text-slate-500">Ziehen Sie das Bild im Rahmen an die gewünschte Stelle oder nutzen Sie die Regler unten zum Vergrößern und Drehen.</p>
+
+            <div class="relative w-full h-64 bg-slate-900 rounded-2xl overflow-hidden cursor-move flex items-center justify-center select-none" id="crop-viewport">
+                <canvas id="crop-canvas" class="max-w-none"></canvas>
+                <div class="absolute inset-0 border-2 border-amber-400 pointer-events-none rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]"></div>
+            </div>
+
+            <div class="space-y-3 pt-1">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                        <span>Zoom / Vergrößerung</span>
+                        <span id="crop-zoom-val" class="text-indigo-600">100%</span>
+                    </label>
+                    <input type="range" id="crop-zoom" min="0.2" max="3" step="0.05" value="1" oninput="updateCropCanvas()" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                </div>
+
+                <div class="flex items-center justify-between gap-2 pt-1">
+                    <button type="button" onclick="rotateCropImage()" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5">
+                        <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+                        <span>90° Drehen</span>
+                    </button>
+                    <button type="button" onclick="resetCropTransforms()" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        <span>Zurücksetzen</span>
+                    </button>
+                </div>
+            </div>
+
+            <button onclick="applyCroppedImage()" class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-sm shadow-md mt-2">
+                Zuschnitt Übernehmen
+            </button>
+        </div>
+    </div>
+
+    <!-- SCANNER MODAL -->
+    <div id="scanner-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex flex-col items-center justify-center p-4">
+        <div class="w-full max-w-lg bg-white rounded-3xl p-5 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between">
+                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="scan" class="w-5 h-5 text-indigo-600"></i>
+                    Kamera Barcode Scanner
+                </h3>
+                <button onclick="closeScannerModal()" class="p-2 bg-slate-100 hover:bg-slate-200 rounded-full"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="interactive" class="viewport relative w-full h-64 bg-slate-900 rounded-2xl overflow-hidden flex items-center justify-center">
+                <div class="absolute inset-0 border-2 border-emerald-400/50 rounded-2xl pointer-events-none flex items-center justify-center">
+                    <div class="w-3/4 h-0.5 bg-rose-500 animate-pulse"></div>
+                </div>
+            </div>
+            <p class="text-xs text-center text-slate-500">Halten Sie den Barcode vor die Kamera.</p>
+        </div>
+    </div>
+
+    <!-- MESSAGE MODAL -->
+    <div id="msg-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-sm p-6 space-y-4 text-center">
+            <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto"><i data-lucide="info" class="w-6 h-6"></i></div>
+            <h3 id="msg-title" class="text-lg font-bold text-slate-900">Meldung</h3>
+            <p id="msg-text" class="text-sm text-slate-600"></p>
+            <button onclick="closeMsgModal()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-sm">OK</button>
+        </div>
+    </div>
+
+    <script>
+        let appData = {
+            products: [],
+            folders: ['i.v. Zugang', 'Beatmung & Larynx', 'Wundversorgung', 'Zubehör & Sonstiges'],
+            vehicles: ['RTW 55601', 'KTW 55602', 'KTW 55603', 'KTW 55608', 'BKTW 55607'],
+            admins: [{ username: 'Christoph_meisel', pass: 'Christoph_meisel', main: true }],
+            logs: []
+        };
+
+        let isAdminLoggedIn = false;
+        let currentAdminUsername = '';
+        let selectedFolder = 'ALLE';
+        let entnahmeCart = [];
+        let scannerTargetContext = 'all';
+
+        let barcodeBuffer = '';
+        let lastKeyTime = Date.now();
+
+        let cropImageObj = new Image();
+        let cropScale = 1;
+        let cropRotation = 0;
+        let cropOffsetX = 0;
+        let cropOffsetY = 0;
+        let isDraggingCrop = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+
+        function initCloudSync() {
+            try {
+                const db = window.db;
+                const appId = window.appId;
+                if (!db || !appId) {
+                    initLocalFallback();
+                    return;
+                }
+
+                const { doc, getDoc, setDoc, onSnapshot } = window.firebaseFirestore || {};
+                // Wir nutzen das Firestore-Modul direkt über den Namespace bzw. import
+                import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then((firestoreModule) => {
+                    const stateDocRef = firestoreModule.doc(db, 'artifacts', appId, 'public', 'data', 'medistock_state');
+                    
+                    firestoreModule.onSnapshot(stateDocRef, (docSnap) => {
+                        if (docSnap.exists()) {
+                            const cloudData = docSnap.data();
+                            if (cloudData && cloudData.products) {
+                                appData = cloudData;
+                                refreshAllViews();
+                            }
+                        } else {
+                            firestoreModule.setDoc(stateDocRef, getDefaultDemoData()).then(() => {
+                                appData = getDefaultDemoData();
+                                refreshAllViews();
+                            });
+                        }
+                    }, (err) => {
+                        console.warn("Cloud snapshot error, using local fallback:", err);
+                        initLocalFallback();
+                    });
+                });
+            } catch(e) {
+                initLocalFallback();
+            }
+        }
+
+        function initLocalFallback() {
+            const data = localStorage.getItem('rk_lager_weitra_v1');
+            if (data) {
+                try { appData = JSON.parse(data); } catch(e) { appData = getDefaultDemoData(); }
+            } else {
+                appData = getDefaultDemoData();
+                saveCloudData();
+            }
+            refreshAllViews();
+        }
+
+        function getDefaultDemoData() {
+            return {
+                folders: ['i.v. Zugang', 'Beatmung & Larynx', 'Wundversorgung', 'Zubehör & Sonstiges'],
+                vehicles: ['RTW 55601', 'KTW 55602', 'KTW 55603', 'KTW 55608', 'BKTW 55607'],
+                admins: [{ username: 'Christoph_meisel', pass: 'Christoph_meisel', main: true }],
+                products: [
+                    { id: 'p1', name: 'Venflöne Rosa 20G', folder: 'i.v. Zugang', barcode: '4012345678901', stock: 15, minStock: 5, image: '' },
+                    { id: 'p2', name: 'Venflöne Grün 18G', folder: 'i.v. Zugang', barcode: '4012345678902', stock: 12, minStock: 5, image: '' },
+                    { id: 'p3', name: 'Nierentasse Edelstahl', folder: 'Zubehör & Sonstiges', barcode: '', stock: 10, minStock: 3, image: '' },
+                    { id: 'p4', name: 'Larynxtubus Gr. 4 Rot', folder: 'Beatmung & Larynx', barcode: '4012345678904', stock: 3, minStock: 2, image: '' }
+                ],
+                logs: [
+                    { id: 'l1', timestamp: new Date().toISOString(), type: 'Entnahme', productName: 'Venflöne Rosa 20G', amount: 2, reason: 'RTW 55601' }
+                ]
+            };
+        }
+
+        async function saveCloudData() {
+            try {
+                if (window.db && window.appId) {
+                    const firestoreModule = await import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js");
+                    const stateDocRef = firestoreModule.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'medistock_state');
+                    await firestoreModule.setDoc(stateDocRef, appData);
+                } else {
+                    localStorage.setItem('rk_lager_weitra_v1', JSON.stringify(appData));
+                }
+            } catch(e) {
+                localStorage.setItem('rk_lager_weitra_v1', JSON.stringify(appData));
+            }
+        }
+
+        function refreshAllViews() {
+            if (!appData.folders) appData.folders = ['i.v. Zugang', 'Beatmung & Larynx', 'Wundversorgung', 'Zubehör & Sonstiges'];
+            if (!appData.vehicles) appData.vehicles = ['RTW 55601', 'KTW 55602', 'KTW 55603', 'KTW 55608', 'BKTW 55607'];
+            if (!appData.admins) appData.admins = [{ username: 'Christoph_meisel', pass: 'Christoph_meisel', main: true }];
+            renderVehicles();
+            renderFoldersUI();
+            renderFolderProducts();
+            renderDashboard();
+            renderInventory();
+            renderLogs();
+            renderUsersTable();
+            lucide.createIcons();
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            setupCropEvents();
+            lucide.createIcons();
+
+            window.addEventListener('keypress', (e) => {
+                const currentTime = Date.now();
+                if (currentTime - lastKeyTime > 100) barcodeBuffer = '';
+                lastKeyTime = currentTime;
+                if (e.key === 'Enter') {
+                    if (barcodeBuffer.trim().length > 2) {
+                        handleGlobalScannedBarcode(barcodeBuffer.trim());
+                        barcodeBuffer = '';
+                    }
+                } else if (!e.ctrlKey && !e.altKey && !e.metaKey && e.target.tagName !== 'INPUT') {
+                    barcodeBuffer += e.key;
+                }
+            });
+        });
+
+        function loadDemoData(showAlert = true) {
+            appData = getDefaultDemoData();
+            saveCloudData();
+            refreshAllViews();
+            if (showAlert) showMsgModal('Demo-Daten geladen', 'Alle Standard-Ordner und Produkte wurden aktualisiert.', 'success');
+        }
+
+        function onImageInputChange() {
+            const val = document.getElementById('prod-image').value.trim();
+            const prevImg = document.getElementById('prod-image-preview');
+            const prevPh = document.getElementById('prod-image-placeholder');
+            const cropBtn = document.getElementById('crop-btn');
+
+            if (val) {
+                prevImg.src = val;
+                prevImg.classList.remove('hidden');
+                prevPh.classList.add('hidden');
+                if (cropBtn) cropBtn.classList.remove('hidden');
+            } else {
+                prevImg.src = '';
+                prevImg.classList.add('hidden');
+                prevPh.classList.remove('hidden');
+                if (cropBtn) cropBtn.classList.add('hidden');
+            }
+        }
+
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(uploadEvent) {
+                document.getElementById('prod-image').value = uploadEvent.target.result;
+                onImageInputChange();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function openCropModal() {
+            const imgSrc = document.getElementById('prod-image').value.trim();
+            if (!imgSrc) return;
+
+            cropImageObj = new Image();
+            cropImageObj.crossOrigin = "anonymous";
+            cropImageObj.onload = function() {
+                resetCropTransforms();
+                document.getElementById('crop-modal').classList.remove('hidden');
+                updateCropCanvas();
+            };
+            cropImageObj.src = imgSrc;
+        }
+
+        function closeCropModal() { document.getElementById('crop-modal').classList.add('hidden'); }
+
+        function resetCropTransforms() {
+            cropScale = 1;
+            cropRotation = 0;
+            cropOffsetX = 0;
+            cropOffsetY = 0;
+            const zoomInput = document.getElementById('crop-zoom');
+            if (zoomInput) zoomInput.value = 1;
+            const zoomVal = document.getElementById('crop-zoom-val');
+            if (zoomVal) zoomVal.textContent = '100%';
+            updateCropCanvas();
+        }
+
+        function rotateCropImage() {
+            cropRotation = (cropRotation + 90) % 360;
+            updateCropCanvas();
+        }
+
+        function setupCropEvents() {
+            const viewport = document.getElementById('crop-viewport');
+            if (!viewport) return;
+
+            viewport.addEventListener('mousedown', (e) => {
+                isDraggingCrop = true;
+                dragStartX = e.clientX - cropOffsetX;
+                dragStartY = e.clientY - cropOffsetY;
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDraggingCrop) return;
+                cropOffsetX = e.clientX - dragStartX;
+                cropOffsetY = e.clientY - dragStartY;
+                updateCropCanvas();
+            });
+
+            window.addEventListener('mouseup', () => { isDraggingCrop = false; });
+        }
+
+        function updateCropCanvas() {
+            const canvas = document.getElementById('crop-canvas');
+            const viewport = document.getElementById('crop-viewport');
+            if (!canvas || !viewport || !cropImageObj.width) return;
+
+            const zoomInput = document.getElementById('crop-zoom');
+            if (zoomInput) {
+                cropScale = parseFloat(zoomInput.value);
+                document.getElementById('crop-zoom-val').textContent = Math.round(cropScale * 100) + '%';
+            }
+
+            canvas.width = viewport.clientWidth;
+            canvas.height = viewport.clientHeight;
+
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(canvas.width / 2 + cropOffsetX, canvas.height / 2 + cropOffsetY);
+            ctx.rotate((cropRotation * Math.PI) / 180);
+            ctx.scale(cropScale, cropScale);
+
+            const drawW = cropImageObj.width;
+            const drawH = cropImageObj.height;
+            const aspect = drawW / drawH;
+            
+            let finalW = canvas.width;
+            let finalH = canvas.width / aspect;
+            if (finalH < canvas.height) {
+                finalH = canvas.height;
+                finalW = canvas.height * aspect;
+            }
+
+            ctx.drawImage(cropImageObj, -finalW / 2, -finalH / 2, finalW, finalH);
+            ctx.restore();
+        }
+
+        function applyCroppedImage() {
+            const canvas = document.getElementById('crop-canvas');
+            if (!canvas) return;
+
+            const croppedBase64 = canvas.toDataURL('image/jpeg', 0.9);
+            document.getElementById('prod-image').value = croppedBase64;
+            onImageInputChange();
+            closeCropModal();
+            showMsgModal('Erfolg', 'Das Foto wurde zugeschnitten.', 'success');
+        }
+
+        function renderFoldersUI() {
+            const adminFolderContainer = document.getElementById('admin-folders-list');
+            if (adminFolderContainer) {
+                if (!appData.folders.length) {
+                    adminFolderContainer.innerHTML = '<span class="text-xs text-slate-400">Keine Ordner angelegt.</span>';
+                } else {
+                    adminFolderContainer.innerHTML = appData.folders.map((f, idx) => `
+                        <div class="px-3.5 py-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-sm font-bold text-amber-900">
+                            <i data-lucide="folder" class="w-4 h-4 text-amber-600"></i>
+                            <span>${escapeHtml(f)}</span>
+                            <button onclick="deleteFolder(${idx})" class="text-slate-400 hover:text-rose-600 ml-1"><i data-lucide="x" class="w-4 h-4"></i></button>
+                        </div>
+                    `).join('');
+                }
+            }
+
+            const folderButtonsGrid = document.getElementById('folder-buttons-grid');
+            if (folderButtonsGrid) {
+                let html = `
+                    <button onclick="setFilterFolder('ALLE')" class="px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all ${selectedFolder === 'ALLE' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                        Alle Ordner
+                    </button>
+                `;
+                appData.folders.forEach(f => {
+                    const isActive = selectedFolder === f;
+                    html += `
+                        <button onclick="setFilterFolder('${escapeHtml(f)}')" class="px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 ${isActive ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-400' : 'bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100'}">
+                            <i data-lucide="folder" class="w-4 h-4"></i>
+                            <span>${escapeHtml(f)}</span>
+                        </button>
+                    `;
+                });
+                folderButtonsGrid.innerHTML = html;
+            }
+
+            const prodFolderSelect = document.getElementById('prod-folder');
+            if (prodFolderSelect) {
+                prodFolderSelect.innerHTML = appData.folders.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('');
+            }
+            lucide.createIcons();
+        }
+
+        function setFilterFolder(folderName) {
+            selectedFolder = folderName;
+            document.getElementById('active-folder-label').textContent = folderName === 'ALLE' ? 'Alle Produkte' : `Ordner: ${folderName}`;
+            renderFoldersUI();
+            renderFolderProducts();
+        }
+
+        function addFolder() {
+            if (!isAdminLoggedIn) return;
+            const input = document.getElementById('new-folder-input');
+            const name = input ? input.value.trim() : '';
+            if (!name) return;
+            if (appData.folders.includes(name)) return;
+            appData.folders.push(name);
+            saveCloudData();
+            renderFoldersUI();
+            if (input) input.value = '';
+            showMsgModal('Erfolg', `Ordner "${name}" angelegt.`, 'success');
+        }
+
+        function deleteFolder(index) {
+            if (!isAdminLoggedIn) return;
+            appData.folders.splice(index, 1);
+            saveCloudData();
+            renderFoldersUI();
+            renderFolderProducts();
+        }
+
+        function renderFolderProducts() {
+            const gridEl = document.getElementById('folder-products-grid');
+            if (!gridEl) return;
+
+            let filtered = appData.products;
+            if (selectedFolder !== 'ALLE') {
+                filtered = appData.products.filter(p => p.folder === selectedFolder);
+            }
+
+            let html = '';
+            filtered.forEach(p => {
+                const folderTag = p.folder || 'Unkategorisiert';
+                const imgHtml = p.image 
+                    ? `<img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}" class="w-full h-24 object-cover rounded-xl mb-2 bg-slate-100">`
+                    : `<div class="w-full h-24 bg-indigo-50/50 rounded-xl mb-2 flex items-center justify-center text-indigo-300"><i data-lucide="package" class="w-8 h-8"></i></div>`;
+
+                html += `
+                    <button onclick="selectProductById('${p.id}')" class="p-3 bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 rounded-2xl text-left transition-all active:scale-95 flex flex-col justify-between group">
+                        <div>
+                            ${imgHtml}
+                            <div class="flex items-start justify-between w-full mb-1">
+                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800">${escapeHtml(folderTag)}</span>
+                                <span class="text-xs font-black text-slate-800">${p.stock} Stk.</span>
+                            </div>
+                            <p class="font-bold text-slate-900 text-xs group-hover:text-amber-900 line-clamp-2 mt-1">${escapeHtml(p.name)}</p>
+                        </div>
+                    </button>
+                `;
+            });
+
+            if (!filtered.length) {
+                html = `<div class="col-span-full text-center py-6 text-xs text-slate-400">Keine Produkte in diesem Ordner gefunden.</div>`;
+            }
+
+            gridEl.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        function selectProductById(id) {
+            const found = appData.products.find(p => p.id === id);
+            if (!found) return;
+
+            const cartItem = entnahmeCart.find(item => item.productId === id);
+            if (cartItem) {
+                if (cartItem.amount + 1 > found.stock) {
+                    showMsgModal('Lagerbestand überschritten', `Maximal verfügbarer Bestand von "${found.name}" ist ${found.stock} Stk.`, 'warning');
+                    return;
+                }
+                cartItem.amount++;
+            } else {
+                if (found.stock < 1) {
+                    showMsgModal('Kein Bestand', `"${found.name}" ist derzeit nicht mehr auf Lager!`, 'warning');
+                    return;
+                }
+                entnahmeCart.push({
+                    productId: found.id,
+                    productName: found.name,
+                    folder: found.folder,
+                    barcode: found.barcode,
+                    stock: found.stock,
+                    amount: 1,
+                    image: found.image || ''
+                });
+            }
+
+            renderEntnahmeCart();
+            document.getElementById('quick-barcode-input').value = '';
+        }
+
+        function renderEntnahmeCart() {
+            const emptyState = document.getElementById('cart-empty-state');
+            const itemsList = document.getElementById('cart-items-list');
+            const actionBlock = document.getElementById('cart-action-block');
+            const clearBtn = document.getElementById('clear-cart-btn');
+            const itemCountEl = document.getElementById('cart-item-count');
+
+            const totalItems = entnahmeCart.reduce((sum, item) => sum + item.amount, 0);
+            if (itemCountEl) itemCountEl.textContent = totalItems;
+
+            if (entnahmeCart.length === 0) {
+                if (emptyState) emptyState.classList.remove('hidden');
+                if (itemsList) itemsList.classList.add('hidden');
+                if (actionBlock) actionBlock.classList.add('hidden');
+                if (clearBtn) clearBtn.classList.add('hidden');
+                return;
+            }
+
+            if (emptyState) emptyState.classList.add('hidden');
+            if (itemsList) itemsList.classList.remove('hidden');
+            if (actionBlock) actionBlock.classList.remove('hidden');
+            if (clearBtn) clearBtn.classList.remove('hidden');
+
+            let html = '';
+            entnahmeCart.forEach((item, index) => {
+                const thumbHtml = item.image 
+                    ? `<img src="${escapeHtml(item.image)}" alt="" class="w-10 h-10 object-cover rounded-lg flex-shrink-0 bg-slate-100 border border-slate-200">`
+                    : `<div class="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-lg flex items-center justify-center flex-shrink-0"><i data-lucide="package" class="w-5 h-5"></i></div>`;
+
+                html += `
+                    <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-3 min-w-0 flex-1">
+                            ${thumbHtml}
+                            <div class="min-w-0 flex-1">
+                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800">${escapeHtml(item.folder || 'Ordner')}</span>
+                                <h4 class="font-extrabold text-slate-900 text-sm truncate mt-0.5">${escapeHtml(item.productName)}</h4>
+                                <p class="text-xs text-slate-500 font-mono">Max. verfügbar: ${item.stock} Stk.</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3 flex-shrink-0">
+                            <div class="flex items-center bg-white border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+                                <button onclick="changeCartItemAmount(${index}, -1)" class="w-9 h-9 flex items-center justify-center text-slate-600 hover:bg-slate-100 font-extrabold">-</button>
+                                <span class="w-10 text-center font-black text-slate-900 text-sm">${item.amount}</span>
+                                <button onclick="changeCartItemAmount(${index}, 1)" class="w-9 h-9 flex items-center justify-center text-slate-600 hover:bg-slate-100 font-extrabold">+</button>
+                            </div>
+
+                            <button onclick="removeCartItem(${index})" class="p-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl transition-all">
+                                <i data-lucide="trash-2" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            if (itemsList) itemsList.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        function changeCartItemAmount(index, delta) {
+            if (!entnahmeCart[index]) return;
+            const item = entnahmeCart[index];
+            const product = appData.products.find(p => p.id === item.productId);
+            const newAmount = item.amount + delta;
+
+            if (newAmount <= 0) { removeCartItem(index); return; }
+            if (product && newAmount > product.stock) {
+                showMsgModal('Bestand überschritten', `Max. verfügbar: ${product.stock} Stk.`, 'warning');
+                return;
+            }
+            item.amount = newAmount;
+            renderEntnahmeCart();
+        }
+
+        function removeCartItem(index) {
+            entnahmeCart.splice(index, 1);
+            renderEntnahmeCart();
+        }
+
+        function clearEntnahmeCart() {
+            entnahmeCart = [];
+            renderEntnahmeCart();
+        }
+
+        function executeCartStockMovement() {
+            if (entnahmeCart.length === 0) return;
+            const selectedVehicle = document.getElementById('qs-vehicle').value;
+            const nowTimestamp = new Date().toISOString();
+
+            entnahmeCart.forEach(item => {
+                const product = appData.products.find(p => p.id === item.productId);
+                if (product) {
+                    product.stock -= item.amount;
+                    appData.logs.push({
+                        id: 'l_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                        timestamp: nowTimestamp,
+                        type: 'Entnahme',
+                        productName: product.name,
+                        amount: Number(item.amount),
+                        reason: selectedVehicle || 'Kein Fahrzeug'
+                    });
+                }
+            });
+
+            const count = entnahmeCart.length;
+            entnahmeCart = [];
+
+            saveCloudData();
+            refreshAllViews();
+            renderEntnahmeCart();
+
+            document.getElementById('quick-barcode-input').value = '';
+            showMsgModal('Entnahme verbucht', `${count} Position(en) erfolgreich für "${selectedVehicle}" verbucht.`, 'success');
+        }
+
+        function processQuickScanInput() {
+            const val = (document.getElementById('quick-barcode-input').value || '').trim().toLowerCase();
+            if (!val) return;
+            const found = appData.products.find(p => (p.barcode && p.barcode.toLowerCase() === val) || p.name.toLowerCase().includes(val));
+            if (found) {
+                selectProductById(found.id);
+            } else {
+                showMsgModal('Nicht gefunden', `Kein Produkt zu "${val}" gefunden.`, 'warning');
+            }
+        }
+
+        function handleQuickBarcodeInput(e) { if (e.key === 'Enter') processQuickScanInput(); }
+        function handleGlobalScannedBarcode(code) {
+            switchTab('quickscan');
+            document.getElementById('quick-barcode-input').value = code;
+            processQuickScanInput();
+        }
+
+        function renderVehicles() {
+            const selectEl = document.getElementById('qs-vehicle');
+            if (selectEl) selectEl.innerHTML = appData.vehicles.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+
+            const tagsContainer = document.getElementById('vehicle-list-tags');
+            if (tagsContainer) {
+                tagsContainer.innerHTML = appData.vehicles.map((v, index) => `
+                    <div class="px-3.5 py-2 bg-slate-100 border border-slate-200 rounded-xl flex items-center gap-2 text-sm font-semibold text-slate-800">
+                        <i data-lucide="truck" class="w-4 h-4 text-indigo-600"></i>
+                        <span>${escapeHtml(v)}</span>
+                        <button onclick="removeVehicle(${index})" class="text-slate-400 hover:text-rose-600 ml-1"><i data-lucide="x" class="w-4 h-4"></i></button>
+                    </div>
+                `).join('');
+            }
+            lucide.createIcons();
+        }
+
+        function addVehicle() {
+            if (!isAdminLoggedIn) return;
+            const input = document.getElementById('new-vehicle-input');
+            const name = input ? input.value.trim() : '';
+            if (!name) return;
+            appData.vehicles.push(name);
+            saveCloudData();
+            renderVehicles();
+            if (input) input.value = '';
+        }
+
+        function removeVehicle(index) {
+            if (!isAdminLoggedIn) return;
+            appData.vehicles.splice(index, 1);
+            saveCloudData();
+            renderVehicles();
+        }
+
+        function renderDashboard() {
+            const totalItems = appData.products.length;
+            document.getElementById('stat-total-items').textContent = totalItems;
+            document.getElementById('stat-folders-count').textContent = appData.folders.length;
+
+            const withdrawalsToday = getTodayWithdrawalsCount();
+            document.getElementById('stat-withdrawals-today').textContent = withdrawalsToday;
+            lucide.createIcons();
+        }
+
+        function getTodayWithdrawalsCount() {
+            if (!appData.logs) return 0;
+            const todayStr = new Date().toDateString();
+            return appData.logs.reduce((sum, log) => {
+                if (log.type === 'Entnahme' && new Date(log.timestamp).toDateString() === todayStr) {
+                    return sum + (Number(log.amount) || 0);
+                }
+                return sum;
+            }, 0);
+        }
+
+        function renderInventory() {
+            if (!isAdminLoggedIn) return;
+            const tbody = document.getElementById('inventory-table-body');
+            if (!tbody) return;
+
+            const searchVal = (document.getElementById('inventory-search')?.value || '').toLowerCase();
+            let filtered = appData.products.filter(p => p.name.toLowerCase().includes(searchVal) || (p.folder && p.folder.toLowerCase().includes(searchVal)));
+
+            let html = '';
+            filtered.forEach(p => {
+                const isLow = p.stock <= p.minStock;
+                const thumbHtml = p.image 
+                    ? `<img src="${escapeHtml(p.image)}" alt="" class="w-10 h-10 object-cover rounded-xl bg-slate-100 border border-slate-200">`
+                    : `<div class="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center"><i data-lucide="package" class="w-5 h-5"></i></div>`;
+
+                html += `
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-3 px-4">
+                            <div class="flex items-center gap-3">
+                                ${thumbHtml}
+                                <div>
+                                    <span class="font-bold text-slate-900">${escapeHtml(p.name)}</span>
+                                    <p class="text-xs text-slate-400 font-mono">Barcode: ${escapeHtml(p.barcode || 'Keiner')}</p>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4 font-semibold text-slate-700">${escapeHtml(p.folder || '-')}</td>
+                        <td class="py-3 px-4 text-center">
+                            <span class="px-2.5 py-1 rounded-lg text-xs font-black ${isLow ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}">
+                                ${p.stock} Stk. (Min: ${p.minStock})
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-right space-x-2">
+                            <button onclick="openProductModal('${p.id}')" class="px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold text-xs rounded-xl">Bearbeiten</button>
+                            <button onclick="deleteProduct('${p.id}')" class="px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs rounded-xl">Löschen</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html || '<tr><td colspan="4" class="text-center py-6 text-xs text-slate-400">Keine Artikel gefunden.</td></tr>';
+            lucide.createIcons();
+        }
+
+        function renderLogs() {
+            if (!isAdminLoggedIn) return;
+            const tbody = document.getElementById('logs-table-body');
+            if (!tbody) return;
+
+            let html = '';
+            [...appData.logs].reverse().forEach(l => {
+                html += `
+                    <tr>
+                        <td class="py-2.5 px-4 text-xs font-mono text-slate-500">${new Date(l.timestamp).toLocaleString()}</td>
+                        <td class="py-2.5 px-4 font-bold text-xs">${escapeHtml(l.type)}</td>
+                        <td class="py-2.5 px-4 font-bold text-slate-900">${escapeHtml(l.productName)}</td>
+                        <td class="py-2.5 px-4 font-bold">${l.amount} Stk.</td>
+                        <td class="py-2.5 px-4 text-xs font-semibold text-slate-700">${escapeHtml(l.reason)}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html || '<tr><td colspan="5" class="text-center py-4 text-xs text-slate-400">Kein Verlauf vorhanden.</td></tr>';
+        }
+
+        function openProductModal(id = null) {
+            if (!isAdminLoggedIn) { openLoginModal(); return; }
+            renderFoldersUI();
+            const modal = document.getElementById('product-modal');
+            modal.classList.remove('hidden');
+
+            if (id) {
+                const p = appData.products.find(item => item.id === id);
+                if (p) {
+                    document.getElementById('prod-id').value = p.id;
+                    document.getElementById('prod-name').value = p.name;
+                    document.getElementById('prod-folder').value = p.folder || appData.folders[0];
+                    document.getElementById('prod-barcode').value = p.barcode || '';
+                    document.getElementById('prod-stock').value = p.stock;
+                    document.getElementById('prod-minstock').value = p.minStock;
+                    document.getElementById('prod-image').value = p.image || '';
+                    onImageInputChange();
+                }
+            } else {
+                document.getElementById('prod-id').value = '';
+                document.getElementById('prod-name').value = '';
+                document.getElementById('prod-barcode').value = '';
+                document.getElementById('prod-stock').value = '10';
+                document.getElementById('prod-minstock').value = '3';
+                document.getElementById('prod-image').value = '';
+                onImageInputChange();
+            }
+        }
+
+        function closeProductModal() { document.getElementById('product-modal').classList.add('hidden'); }
+
+        function saveProduct() {
+            if (!isAdminLoggedIn) return;
+            const id = document.getElementById('prod-id').value;
+            const name = document.getElementById('prod-name').value.trim();
+            const folder = document.getElementById('prod-folder').value;
+            const barcode = document.getElementById('prod-barcode').value.trim();
+            const stock = parseInt(document.getElementById('prod-stock').value) || 0;
+            const minStock = parseInt(document.getElementById('prod-minstock').value) || 0;
+            const image = document.getElementById('prod-image').value.trim();
+
+            if (!name) { showMsgModal('Hinweis', 'Bitte Produktnamen eingeben.', 'warning'); return; }
+
+            if (id) {
+                const p = appData.products.find(item => item.id === id);
+                if (p) {
+                    p.name = name; p.folder = folder; p.barcode = barcode; p.stock = stock; p.minStock = minStock; p.image = image;
+                }
+            } else {
+                appData.products.push({
+                    id: 'p_' + Date.now(),
+                    name, folder, barcode, stock, minStock, image
+                });
+            }
+
+            saveCloudData();
+            refreshAllViews();
+            closeProductModal();
+            showMsgModal('Erfolg', `Produkt "${name}" gespeichert.`, 'success');
+        }
+
+        function deleteProduct(id) {
+            if (!isAdminLoggedIn) return;
+            if (confirm('Produkt wirklich löschen?')) {
+                appData.products = appData.products.filter(p => p.id !== id);
+                saveCloudData();
+                refreshAllViews();
+            }
+        }
+
+        function openLoginModal() {
+            if (isAdminLoggedIn) { switchTab('admin'); return; }
+            const modal = document.getElementById('login-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                setTimeout(() => {
+                    const userInput = document.getElementById('login-user');
+                    if (userInput) userInput.focus();
+                }, 100);
+            }
+        }
+
+        function closeLoginModal() { 
+            const modal = document.getElementById('login-modal');
+            if (modal) modal.classList.add('hidden'); 
+        }
+
+        function handleLoginKeydown(e) { if (e.key === 'Enter') submitAdminLogin(); }
+
+        function submitAdminLogin() {
+            const user = document.getElementById('login-user').value.trim();
+            const pass = document.getElementById('login-pass').value.trim();
+            const matchedAdmin = appData.admins.find(a => a.username === user && a.pass === pass);
+
+            if (matchedAdmin) {
+                isAdminLoggedIn = true;
+                currentAdminUsername = matchedAdmin.username;
+                closeLoginModal();
+                updateUIRoleState();
+                switchTab('admin');
+                showMsgModal('Erfolg', `Angemeldet als ${matchedAdmin.username}`, 'success');
+            } else {
+                showMsgModal('Fehler', 'Benutzername oder Passwort falsch.', 'warning');
+            }
+        }
+
+        function updateUIRoleState() {
+            const roleBadge = document.getElementById('role-badge-header');
+            const authBtnText = document.getElementById('auth-btn-text');
+            const adminNavGroup = document.getElementById('admin-nav-group');
+
+            if (isAdminLoggedIn) {
+                roleBadge.textContent = `Admin: ${currentAdminUsername}`;
+                authBtnText.textContent = 'Admin Bereich';
+                adminNavGroup.classList.remove('hidden');
+            } else {
+                roleBadge.textContent = 'Personal (Entnahme)';
+                authBtnText.textContent = 'Admin Login';
+                adminNavGroup.classList.add('hidden');
+            }
+            refreshAllViews();
+        }
+
+        function renderUsersTable() {
+            if (!isAdminLoggedIn) return;
+            const tbody = document.getElementById('users-table-body');
+            if (!tbody) return;
+            tbody.innerHTML = appData.admins.map((a, idx) => `
+                <tr>
+                    <td class="py-3 px-4 font-bold text-slate-900">${escapeHtml(a.username)}</td>
+                    <td class="py-3 px-4 text-xs font-bold text-indigo-600">${a.main ? 'Hauptadmin' : 'Admin'}</td>
+                    <td class="py-3 px-4 text-right">
+                        ${a.main ? '-' : `<button onclick="deleteAdminUser(${idx})" class="text-xs text-rose-600 font-bold">Löschen</button>`}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function createNewAdminUser() {
+            if (!isAdminLoggedIn) return;
+            const u = document.getElementById('new-admin-user').value.trim();
+            const p = document.getElementById('new-admin-pass').value.trim();
+            if (!u || !p) return;
+            appData.admins.push({ username: u, pass: p, main: false });
+            saveCloudData();
+            renderUsersTable();
+            showMsgModal('Erfolg', 'Neuer Admin angelegt.', 'success');
+        }
+
+        function deleteAdminUser(index) {
+            if (!isAdminLoggedIn) return;
+            appData.admins.splice(index, 1);
+            saveCloudData();
+            renderUsersTable();
+        }
+
+        function openScannerModal(context = 'all') {
+            scannerTargetContext = context;
+            document.getElementById('scanner-modal').classList.remove('hidden');
+            try {
+                Quagga.init({
+                    inputStream: { name: "Live", type: "LiveStream", target: document.querySelector('#interactive'), constraints: { facingMode: "environment" } },
+                    decoder: { readers: ["ean_reader", "code_128_reader", "ean_8_reader"] }
+                }, err => { if (!err) Quagga.start(); });
+                Quagga.onDetected(onQuaggaBarcodeDetected);
+            } catch (e) {}
+        }
+
+        function closeScannerModal() {
+            try { Quagga.stop(); } catch (e) {}
+            document.getElementById('scanner-modal').classList.add('hidden');
+        }
+
+        function onQuaggaBarcodeDetected(res) {
+            const code = res.codeResult.code;
+            if (code) {
+                closeScannerModal();
+                if (scannerTargetContext === 'quick') {
+                    document.getElementById('quick-barcode-input').value = code;
+                    processQuickScanInput();
+                } else if (scannerTargetContext === 'product_form') {
+                    document.getElementById('prod-barcode').value = code;
+                } else {
+                    handleGlobalScannedBarcode(code);
+                }
+            }
+        }
+
+        function switchTab(tabId) {
+            if ((tabId === 'inventory' || tabId === 'admin' || tabId === 'history' || tabId === 'users') && !isAdminLoggedIn) { openLoginModal(); return; }
+            document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            refreshAllViews();
+            lucide.createIcons();
+        }
+
+        function showMsgModal(title, text, type = 'info') {
+            document.getElementById('msg-title').textContent = title;
+            document.getElementById('msg-text').textContent = text;
+            document.getElementById('msg-modal').classList.remove('hidden');
+        }
+
+        function closeMsgModal() { document.getElementById('msg-modal').classList.add('hidden'); }
+
+    
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
